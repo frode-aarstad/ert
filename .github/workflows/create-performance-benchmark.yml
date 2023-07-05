@@ -1,0 +1,21 @@
+name: Create performance benchmark
+
+on:
+  workflow_dispatch:
+  
+jobs:
+  create-benchmark:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+  
+    steps:
+    - name: Checkout ert
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        
+    - name: Install ert
+      run: |
+        pip install .
+  
