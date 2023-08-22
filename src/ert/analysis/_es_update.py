@@ -215,34 +215,34 @@ def _save_to_temp_storage(
             offset += len(row_indices)
 
 
-def _save_temp_storage_to_disk(
+def _save_to_disk(
     target_fs: EnsembleAccessor,
     ensemble_config: "EnsembleConfig",
-    temp_storage: TempStorage,
+    key: str,
+    matrix : Union[npt.NDArray[np.double], xr.DataArray],
     iens_active_index: List[int],
 ) -> None:
-    for key, matrix in temp_storage.items():
-        config_node = ensemble_config.parameter_configs[key]
-        for i, realization in enumerate(iens_active_index):
-            if isinstance(config_node, GenKwConfig):
-                assert isinstance(matrix, np.ndarray)
-                dataset = xr.Dataset(
-                    {
-                        "values": ("names", matrix[:, i]),
-                        "transformed_values": (
-                            "names",
-                            config_node.transform(matrix[:, i]),
-                        ),
-                        "names": [e.name for e in config_node.transfer_functions],
-                    }
-                )
-                target_fs.save_parameters(key, realization, dataset)
-            elif isinstance(config_node, (Field, SurfaceConfig)):
-                _matrix = temp_storage.get_xr_array(key, i)
-                assert isinstance(_matrix, xr.DataArray)
-                target_fs.save_parameters(key, realization, _matrix.to_dataset())
-            else:
-                raise NotImplementedError(f"{type(config_node)} is not supported")
+    config_node = ensemble_config.parameter_configs[key]
+    for i, realization in enumerate(iens_active_index):
+        if isinstance(config_node, GenKwConfig):
+            assert isinstance(matrix, np.ndarray)
+            dataset = xr.Dataset(
+                {
+                    "values": ("names", matrix[:, i]),
+                    "transformed_values": (
+                        "names",
+                        config_node.transform(matrix[:, i]),
+                    ),
+                    "names": [e.name for e in config_node.transfer_functions],
+                }
+            )
+            target_fs.save_parameters(key, realization, dataset)
+        elif isinstance(config_node, (Field, SurfaceConfig)):
+
+            assert isinstance(matrix[i], xr.DataArray)
+            target_fs.save_parameters(key, realization, matrix[i].to_dataset())
+        else:
+            raise NotImplementedError(f"{type(config_node)} is not supported")
     target_fs.sync()
 
 
@@ -279,6 +279,31 @@ def _create_temporary_parameter_storage(
                   surface={t_surface:.4f}s, field={t_field:.4f}s"
         )
     return temp_storage
+
+
+def _load_parameter(
+    source_fs: EnsembleReader,
+    ensemble_config: "EnsembleConfig",
+    iens_active_index: List[int],
+    key: str,
+) -> Union[npt.NDArray[np.double], xr.DataArray]:
+    config_node = ensemble_config.parameter_configs[key]
+    if isinstance(config_node, GenKwConfig):
+        matrix = source_fs.load_parameters(key, iens_active_index).values.T
+    elif isinstance(config_node, SurfaceConfig):
+        matrix = source_fs.load_parameters(key, iens_active_index)
+    elif isinstance(config_node, Field):
+        matrix = source_fs.load_parameters(key, iens_active_index)
+    else:
+        raise NotImplementedError(f"{type(config_node)} is not supported")
+    
+    #if not isinstance(matrix, xr.DataArray):
+    #    return matrix
+    #ensemble_size = len(matrix.realizations)
+    #return matrix.values.reshape(ensemble_size, -1).T
+    return matrix
+
+    
 
 
 def _get_obs_and_measure_data(
@@ -399,14 +424,15 @@ def analysis_ES(
     iens_active_index = [i for i in range(len(ens_mask)) if ens_mask[i]]
 
     progress_callback(Progress(Task("Loading data", 1, 3), None))
-    temp_storage = _create_temporary_parameter_storage(
-        source_fs, ensemble_config, iens_active_index
-    )
+    # temp_storage = _create_temporary_parameter_storage(
+    #    source_fs, ensemble_config, iens_active_index
+    # )
 
     ensemble_size = sum(ens_mask)
-    param_ensemble = _param_ensemble_for_projection(
-        temp_storage, ensemble_size, updatestep
-    )
+    #param_ensemble = _param_ensemble_for_projection(
+    #    temp_storage, ensemble_size, updatestep
+    #)
+    param_ensemble= None
 
     progress_callback(Progress(Task("Updating data", 2, 3), None))
     for update_step in updatestep:
@@ -448,35 +474,67 @@ def analysis_ES(
                 param_ensemble=param_ensemble,
             )
             if active_indices := parameter.index_list:
-                temp_storage[parameter.name][active_indices, :] = smoother.update(
-                    temp_storage[parameter.name][active_indices, :]
+                prior = _load_parameter(
+                    source_fs, ensemble_config, active_indices, parameter.name
+                )
+                tmp_matrix = smoother.update(prior)
+                _save_to_disk(
+                    target_fs,
+                    ensemble_config,
+                    parameter.name,
+                    tmp_matrix,
+                    iens_active_index,
                 )
             else:
-                temp_storage[parameter.name] = smoother.update(
-                    temp_storage[parameter.name]
+                prior = _load_parameter(
+                    source_fs, ensemble_config, iens_active_index, parameter.name
                 )
 
-        if params_with_row_scaling := _get_params_with_row_scaling(
-            temp_storage, update_step.row_scaling_parameters
-        ):
-            params_with_row_scaling = ensemble_smoother_update_step_row_scaling(
-                S,
-                params_with_row_scaling,
-                observation_errors,
-                observation_values,
-                noise,
-                module.get_truncation(),
-                ies.InversionType(module.inversion),
-            )
-            for row_scaling_parameter, (A, _) in zip(
-                update_step.row_scaling_parameters, params_with_row_scaling
-            ):
-                _save_to_temp_storage(temp_storage, [row_scaling_parameter], A)
+                if isinstance(prior, xr.DataArray):
+                    ensemble_size = len(prior.realizations)
+                    new_prior= prior.values.reshape(ensemble_size, -1).T
+
+                    tmp_matrix = smoother.update(new_prior)
+
+                    prior.data = tmp_matrix.T.reshape(*prior.shape)
+                    _save_to_disk(
+                        target_fs,
+                        ensemble_config,
+                        parameter.name,
+                        prior,
+                        iens_active_index,
+                    )
+
+
+                else:
+                    tmp_matrix = smoother.update(prior)
+                
+                    _save_to_disk(
+                        target_fs,
+                        ensemble_config,
+                        parameter.name,
+                        tmp_matrix,
+                        iens_active_index,
+                    )
+
+        # if params_with_row_scaling := _get_params_with_row_scaling(
+        #     temp_storage, update_step.row_scaling_parameters
+        # ):
+        #     params_with_row_scaling = ensemble_smoother_update_step_row_scaling(
+        #         S,
+        #         params_with_row_scaling,
+        #         observation_errors,
+        #         observation_values,
+        #         noise,
+        #         module.get_truncation(),
+        #         ies.InversionType(module.inversion),
+        #     )
+        #     for row_scaling_parameter, (A, _) in zip(
+        #         update_step.row_scaling_parameters, params_with_row_scaling
+        #     ):
+        #         _save_to_temp_storage(temp_storage, [row_scaling_parameter], A)
 
     progress_callback(Progress(Task("Storing data", 3, 3), None))
-    _save_temp_storage_to_disk(
-        target_fs, ensemble_config, temp_storage, iens_active_index
-    )
 
 
 def analysis_IES(
