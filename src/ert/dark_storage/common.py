@@ -36,18 +36,24 @@ def data_for_key(
     given case. The row index is the realization number, and the columns are an
     index over the indexes/dates"""
 
+    import time
     if key.startswith("LOG10_"):
         key = key[6:]
     if key in ensemble.get_summary_keyset():
-        data = ensemble.load_all_summary_data([key], realization_index)
+        t= time.perf_counter()
+        data = ensemble.load_summary(key, realization_index)
         data = data[key].unstack(level="Date")
+        print(f"data_for_key 1 {time.perf_counter() -t }")
     elif key in ensemble.get_gen_kw_keyset():
+        t= time.perf_counter()
         data = ensemble.load_all_gen_kw_data(key.split(":")[0], realization_index)
         if data.empty:
             return pd.DataFrame()
         data = data[key].to_frame().dropna()
         data.columns = pd.Index([0])
+        print(f"data_for_key 2 {time.perf_counter() -t }")
     elif key in ensemble.get_gen_data_keyset():
+        t= time.perf_counter()
         key_parts = key.split("@")
         key = key_parts[0]
         report_step = int(key_parts[1]) if len(key_parts) > 1 else 0
@@ -58,6 +64,7 @@ def data_for_key(
                 report_step,
                 realization_index,
             ).T
+            print(f"data_for_key 3 {time.perf_counter() -t }")
         except (ValueError, KeyError):
             return pd.DataFrame()
     else:

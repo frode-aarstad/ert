@@ -362,11 +362,58 @@ class LocalEnsembleReader:
             input_path = self.mount_point / f"realization-{realization}" / f"{key}.nc"
             if not input_path.exists():
                 raise KeyError(f"No response for key {key}, realization: {realization}")
-            ds = xr.open_dataset(input_path, engine="scipy")
+            ds = xr.open_dataset(input_path, engine="netcdf4")
             loaded.append(ds)
         response = xr.combine_nested(loaded, concat_dim="realization")
         assert isinstance(response, xr.Dataset)
         return response
+
+
+    def load_responses_summary(
+        self, key: str, realizations: npt.NDArray[np.int_]
+    ) -> xr.Dataset:
+        loaded = []
+        for realization in realizations:
+            input_path = self.mount_point / f"realization-{realization}" / f"summary.nc"
+            if not input_path.exists():
+                raise KeyError(f"No response for summary, realization: {realization}")
+            
+            ## test using xarray.open_mfdataset()
+            ds = xr.open_dataset(input_path, engine="scipy")
+            ds= ds.query(name=f'name=="{key}"')
+            
+            loaded.append(ds)
+        response = xr.combine_nested(loaded, concat_dim="realization")
+        assert isinstance(response, xr.Dataset)
+        return response
+
+
+
+    def load_summary(self, key:str, realization_index: Optional[int] = None,) -> pd.DataFrame:
+        realizations = self.get_realization_list_with_responses()
+        if realization_index is not None:
+            if realization_index not in realizations:
+                raise IndexError(f"No such realization {realization_index}")
+            realizations = [realization_index]
+
+        import time 
+        try:
+            t = time.perf_counter()
+            df = self.load_responses_summary(key, tuple(realizations)).to_dataframe()
+            print(f"load_summary - Load time used {time.perf_counter() - t}")
+        except (ValueError, KeyError):
+            return pd.DataFrame()
+        
+        t = time.perf_counter()
+        print(df.memory_usage())
+        df = df.unstack(level="name")
+        df.columns = [col[1] for col in df.columns.values]
+        df.index = df.index.rename(
+            {"time": "Date", "realization": "Realization"}
+        ).reorder_levels(["Realization", "Date"])
+        print(f"load_summary - Reorder time used {time.perf_counter() - t}")
+
+        return df
 
     @deprecated("Use load_responses")
     def load_all_summary_data(
@@ -383,9 +430,13 @@ class LocalEnsembleReader:
         summary_keys = self.get_summary_keyset()
 
         try:
+            import time 
+            t = time.perf_counter()
             df = self.load_responses("summary", tuple(realizations)).to_dataframe()
+            print(f"load_all_summary_data - Time used {time.perf_counter() - t}")
         except (ValueError, KeyError):
             return pd.DataFrame()
+        #df= df.query(f'name == "{key}"')
         df = df.unstack(level="name")
         df.columns = [col[1] for col in df.columns.values]
         df.index = df.index.rename(

@@ -44,7 +44,7 @@ class PlotWindow(QMainWindow):
         QMainWindow.__init__(self, parent)
 
         logger.info("PlotWindow __init__")
-
+        print("PlotWindow 1")
         self.setMinimumWidth(850)
         self.setMinimumHeight(650)
 
@@ -60,7 +60,7 @@ class PlotWindow(QMainWindow):
             QMessageBox.critical(self, "Request Failed", f"{e}")
             self._key_definitions = []
         QApplication.restoreOverrideCursor()
-
+        print("PlotWindow 2")
         self._plot_customizer = PlotCustomizer(self, self._key_definitions)
 
         self._plot_customizer.settingsChanged.connect(self.keySelected)
@@ -95,7 +95,7 @@ class PlotWindow(QMainWindow):
             QMessageBox.critical(self, "Request Failed", f"{e}")
             cases = []
         QApplication.restoreOverrideCursor()
-
+        print("PlotWindow 3")
         case_names = [case["name"] for case in cases if not case["hidden"]]
 
         self._data_type_keys_widget = DataTypeKeysWidget(self._key_definitions)
@@ -108,6 +108,7 @@ class PlotWindow(QMainWindow):
         current_plot_widget = self._plot_widgets[self._central_tab.currentIndex()]
         self._data_type_keys_widget.selectDefault()
         self._updateCustomizer(current_plot_widget)
+        print("PlotWindow done")
 
     def currentPlotChanged(self):
         key_def = self.getSelectedKey()

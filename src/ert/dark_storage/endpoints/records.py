@@ -7,6 +7,7 @@ import pandas as pd
 from fastapi import APIRouter, Body, Depends, File, Header, Request, UploadFile, status
 from fastapi.responses import Response
 from typing_extensions import Annotated
+from ert.config.enkf_observation_implementation_type import EnkfObservationImplementationType
 
 from ert.dark_storage import json_schema as js
 from ert.dark_storage.common import (
@@ -177,6 +178,8 @@ async def get_ensemble_record(
     realization_index: Optional[int] = None,
     label: Optional[str] = None,
 ) -> Any:
+    import time
+    t= time.perf_counter()
     dataframe = data_for_key(db.get_ensemble(ensemble_id), name, realization_index)
     if realization_index is not None:
         # dataframe.loc returns a Series, and when we reconstruct a DataFrame
@@ -189,13 +192,16 @@ async def get_ensemble_record(
         dataframe.columns = [str(s) for s in dataframe.columns]
         stream = io.BytesIO()
         dataframe.to_parquet(stream)
+        print(f"rest {time.perf_counter()- t}") 
         return Response(
             content=stream.getvalue(),
             media_type="application/x-parquet",
         )
     elif media_type == "application/json":
+        print(f"rest {time.perf_counter()- t}") 
         return Response(dataframe.to_json(), media_type="application/json")
     else:
+        print(f"rest {time.perf_counter()- t}") 
         return Response(
             content=dataframe.to_csv().encode(),
             media_type="text/csv",
@@ -251,13 +257,17 @@ def get_ensemble_responses(
     response_map: Dict[str, js.RecordOut] = {}
 
     ens = db.get_ensemble(ensemble_id)
+    
+    name_dict={}
+    for obs in res.get_observations():
+        name_dict[obs.observation_key] = obs.observation_type
+
     for name in ens.get_summary_keyset():
-        obs_keys = res.observation_keys(name)
         response_map[str(name)] = js.RecordOut(
             id=UUID(int=0),
             name=name,
             userdata={"data_origin": "Summary"},
-            has_observations=len(obs_keys) != 0,
+            has_observations=name in name_dict,
         )
 
     for name in res.get_gen_data_keys():

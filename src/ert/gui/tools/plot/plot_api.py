@@ -94,9 +94,13 @@ class PlotApi:
         the key"""
 
         all_keys = {}
+        import time
+        t1= time.perf_counter()
         with StorageService.session() as client:
+            print(f"plotAPI - all_data_type_keys - session {time.perf_counter()- t1}")     
             for experiment in self._get_experiments():
                 for ensemble in self._get_ensembles(experiment["id"]):
+                    t= time.perf_counter()
                     response: requests.Response = client.get(
                         f"/ensembles/{ensemble['id']}/responses", timeout=self._timeout
                     )
@@ -110,7 +114,8 @@ class PlotApi:
                             "metadata": value["userdata"],
                             "log_scale": key.startswith("LOG10_"),
                         }
-
+                    print(f"plotAPI - all_data_type_keys1  {time.perf_counter()- t}") 
+                    t= time.perf_counter()
                     response: requests.Response = client.get(
                         f"/ensembles/{ensemble['id']}/parameters", timeout=self._timeout
                     )
@@ -125,7 +130,8 @@ class PlotApi:
                             "metadata": e["userdata"],
                             "log_scale": key.startswith("LOG10_"),
                         }
-
+                    print(f"plotAPI - all_data_type_keys2  {time.perf_counter()- t}") 
+        print(f"plotAPI - all_data_type_keys  {time.perf_counter()- t1}") 
         return list(all_keys.values())
 
     def get_all_cases_not_running(self) -> List:
@@ -133,7 +139,7 @@ class PlotApi:
         info about the case is returned"""
         # Currently, the ensemble information from the storage API does not contain any
         # hint if a case is running or not for now we return all the cases, running or
-        # not
+        # no
         return self._get_all_cases()
 
     def data_for_key(self, case_name, key) -> pd.DataFrame:
