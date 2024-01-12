@@ -42,18 +42,23 @@ logger = logging.getLogger(__name__)
 class PlotWindow(QMainWindow):
     def __init__(self, config_file, parent):
         QMainWindow.__init__(self, parent)
-
+        import time
+        t_total= time.perf_counter()
         logger.info("PlotWindow __init__")
         print("PlotWindow 1")
         self.setMinimumWidth(850)
         self.setMinimumHeight(650)
 
+        
         self.setWindowTitle(f"Plotting - {config_file}")
         self.activateWindow()
 
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
+            print("plotapi init")
+            t= time.perf_counter()
             self._api = PlotApi()
+            print(f"PlotApi init {time.perf_counter()-t}")
             self._key_definitions = self._api.all_data_type_keys()
         except (RequestError, TimeoutError) as e:
             logger.exception(e)
@@ -89,7 +94,9 @@ class PlotWindow(QMainWindow):
 
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
+            t= time.perf_counter()
             cases = self._api.get_all_cases_not_running()
+            print(f" Plotwindow2.2  {time.perf_counter()-t }")
         except (RequestError, TimeoutError) as e:
             logger.exception(e)
             QMessageBox.critical(self, "Request Failed", f"{e}")
@@ -108,13 +115,15 @@ class PlotWindow(QMainWindow):
         current_plot_widget = self._plot_widgets[self._central_tab.currentIndex()]
         self._data_type_keys_widget.selectDefault()
         self._updateCustomizer(current_plot_widget)
-        print("PlotWindow done")
+        print(f"PlotWindow init done, time= {time.perf_counter() -t_total }s")
 
     def currentPlotChanged(self):
         key_def = self.getSelectedKey()
         if key_def is None:
             return
         key = key_def["key"]
+
+        print(f"currentPlotChanged {key}")
 
         plot_widget = self._central_tab.currentWidget()
 
@@ -124,7 +133,10 @@ class PlotWindow(QMainWindow):
             case_to_data_map = {}
             for case in cases:
                 try:
+                    import time 
+                    t= time.perf_counter()
                     case_to_data_map[case] = self._api.data_for_key(case, key)
+                    print(f"currentPlotChanged data_for_key= {time.perf_counter() -t}")
                 except (RequestError, TimeoutError) as e:
                     logger.exception(e)
                     msg = f"{e}"
@@ -134,7 +146,10 @@ class PlotWindow(QMainWindow):
             observations = None
             if key_def["observations"] and cases:
                 try:
+                    import time 
+                    t= time.perf_counter()
                     observations = self._api.observations_for_key(cases[0], key)
+                    print(f"currentPlotChanged obs_forkey= {time.perf_counter() -t}")
                 except (RequestError, TimeoutError) as e:
                     logger.exception(e)
                     msg = f"{e}"

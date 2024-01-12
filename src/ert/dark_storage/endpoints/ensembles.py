@@ -42,6 +42,26 @@ def get_ensemble(
     )
 
 
+@router.get("/ensembles/{ensemble_id}/small", response_model=js.EnsembleOut)
+def get_ensemble_small(
+    *,
+    storage: StorageAccessor = DEFAULT_STORAGE,
+    ensemble_id: UUID,
+) -> js.EnsembleOut:
+    ensemble = storage.get_ensemble(ensemble_id)
+    return js.EnsembleOut(
+        id=ensemble_id,
+        children=[],
+        parent=None,
+        experiment_id=ensemble.experiment_id,
+        userdata={"name": ensemble.name},
+        size=ensemble.ensemble_size,
+        parameter_names=[],
+        response_names=[],
+        child_ensemble_ids=[],
+    )
+
+
 @router.put("/ensembles/{ensemble_id}/userdata")
 async def replace_ensemble_userdata(
     *,

@@ -59,6 +59,7 @@ class StorageService(BaseService):
 
         for url in self.fetch_conn_info()["urls"]:
             try:
+                print("fetch_url")
                 resp = requests.get(f"{url}/healthcheck", auth=self.fetch_auth())
                 if resp.status_code == 200:
                     self._url = url

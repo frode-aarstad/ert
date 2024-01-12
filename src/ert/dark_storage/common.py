@@ -47,11 +47,11 @@ def data_for_key(
     elif key in ensemble.get_gen_kw_keyset():
         t= time.perf_counter()
         data = ensemble.load_all_gen_kw_data(key.split(":")[0], realization_index)
+        print(f"data_for_key 2 {time.perf_counter() -t }")
         if data.empty:
             return pd.DataFrame()
         data = data[key].to_frame().dropna()
         data.columns = pd.Index([0])
-        print(f"data_for_key 2 {time.perf_counter() -t }")
     elif key in ensemble.get_gen_data_keyset():
         t= time.perf_counter()
         key_parts = key.split("@")
@@ -66,8 +66,10 @@ def data_for_key(
             ).T
             print(f"data_for_key 3 {time.perf_counter() -t }")
         except (ValueError, KeyError):
+            print(f"data_for_key 3 except {time.perf_counter() -t }")
             return pd.DataFrame()
     else:
+        print("data_for_key not found")
         return pd.DataFrame()
 
     try:

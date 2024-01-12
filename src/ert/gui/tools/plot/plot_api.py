@@ -3,7 +3,7 @@ import logging
 from itertools import combinations as combi
 from json.decoder import JSONDecodeError
 from typing import List, Optional
-
+import time
 import httpx
 import pandas as pd
 import requests
@@ -21,8 +21,12 @@ class PlotApi:
         self._reset_storage_facade()
 
     def _reset_storage_facade(self):
+        t= time.perf_counter()
         with StorageService.session() as client:
+            print(f"_reset_storage_facade time1 {time.perf_counter()-t}")
+            t= time.perf_counter()
             client.post("/updates/facade", timeout=self._timeout)
+            print(f"_reset_storage_facade time2 {time.perf_counter()-t}")
 
     def _get_case(self, name: str) -> Optional[dict]:
         for e in self._get_all_cases():
@@ -43,7 +47,7 @@ class PlotApi:
                 for experiment in experiments:
                     for ensemble_id in experiment["ensemble_ids"]:
                         response = client.get(
-                            f"/ensembles/{ensemble_id}", timeout=self._timeout
+                            f"/ensembles/{ensemble_id}/small", timeout=self._timeout
                         )
                         self._check_response(response)
                         response_json = response.json()
@@ -69,11 +73,16 @@ class PlotApi:
             )
 
     def _get_experiments(self) -> dict:
+        import time
+        t= time.perf_counter()
         with StorageService.session() as client:
+            print(f"_get_experiments1  {time.perf_counter()- t}") 
+            t= time.perf_counter()
             response: requests.Response = client.get(
                 "/experiments", timeout=self._timeout
             )
             self._check_response(response)
+            print(f"_get_experiments3  {time.perf_counter()- t}") 
             return response.json()
 
     def _get_ensembles(self, experiement_id) -> List:
@@ -97,8 +106,14 @@ class PlotApi:
         import time
         t1= time.perf_counter()
         with StorageService.session() as client:
-            print(f"plotAPI - all_data_type_keys - session {time.perf_counter()- t1}")     
-            for experiment in self._get_experiments():
+            t= time.perf_counter()
+            response: requests.Response = client.get(
+                "/experiments", timeout=self._timeout
+            )
+            self._check_response(response)
+            print(f"_get_experiments3  {time.perf_counter()- t}") 
+
+            for experiment in response.json():
                 for ensemble in self._get_ensembles(experiment["id"]):
                     t= time.perf_counter()
                     response: requests.Response = client.get(
@@ -131,7 +146,8 @@ class PlotApi:
                             "log_scale": key.startswith("LOG10_"),
                         }
                     print(f"plotAPI - all_data_type_keys2  {time.perf_counter()- t}") 
-        print(f"plotAPI - all_data_type_keys  {time.perf_counter()- t1}") 
+            print(f"plotAPI - all_data_type_keys  {time.perf_counter()- t1}") 
+        print(f"plotAPI - all_data_type_keys -session end {time.perf_counter()- t1}") 
         return list(all_keys.values())
 
     def get_all_cases_not_running(self) -> List:
@@ -209,6 +225,8 @@ class PlotApi:
         """Returns a pandas DataFrame with the data points for the history for a
         given data key, if any.  The row index is the index/date and the column
         index is the key."""
+
+        print(f"history data {key}")
 
         if ":" in key:
             head, tail = key.split(":", 2)

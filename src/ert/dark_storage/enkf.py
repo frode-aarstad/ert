@@ -35,8 +35,14 @@ def init_facade() -> LibresFacade:
 
 
 def get_res(*, _: None = DEFAULT_SECURITY) -> LibresFacade:
+    print("get_res")
     if _libres_facade is None:
-        return init_facade()
+        import time
+        t = time.perf_counter()
+        a= init_facade()
+        print(f"get_res - init_facede, t={time.perf_counter() -t}")
+        return a 
+    
     return _libres_facade
 
 
@@ -52,7 +58,11 @@ def get_storage(*, res: LibresFacade = DEFAULT_LIBRESFACADE) -> StorageReader:
 
 
 def reset_res(*, _: None = DEFAULT_SECURITY) -> None:
+    import time
+    print("reset_res")
+    t= time.perf_counter()
     global _libres_facade  # noqa: PLW0603
     if _libres_facade is not None:
         _libres_facade = None
+    print(f"t {time.perf_counter()-t}")
     return _libres_facade

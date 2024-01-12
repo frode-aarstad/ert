@@ -105,8 +105,8 @@ class LocalEnsembleReader:
     def get_realization_mask_with_parameters(self) -> npt.NDArray[np.bool_]:
         return np.array([self._get_parameter(i) for i in range(self.ensemble_size)])
 
-    def get_realization_mask_with_responses(self) -> npt.NDArray[np.bool_]:
-        return np.array([self._get_response(i) for i in range(self.ensemble_size)])
+    def get_realization_mask_with_responses(self, key: Optional[str] = None) -> npt.NDArray[np.bool_]:
+        return np.array([self._get_response(i, key) for i in range(self.ensemble_size)])
 
     def _get_parameter(self, realization: int) -> bool:
         if not self.experiment.parameter_configuration:
@@ -117,10 +117,14 @@ class LocalEnsembleReader:
             for parameter in self.experiment.parameter_configuration
         )
 
-    def _get_response(self, realization: int) -> bool:
+    def _get_response(self, realization: int, key: Optional[str] = None) -> bool:
         if not self.experiment.response_configuration:
             return False
         path = self.mount_point / f"realization-{realization}"
+
+        if key:
+            return (path / f"{key}.nc").exists()
+
         return all(
             (path / f"{response}.nc").exists()
             for response in self._filter_response_configuration()
@@ -180,9 +184,9 @@ class LocalEnsembleReader:
 
         return all((responses[real] or parameters[real]) for real in realizations)
 
-    def get_realization_list_with_responses(self) -> List[int]:
+    def get_realization_list_with_responses(self, key: Optional[str] = None) -> List[int]:
         return [
-            idx for idx, b in enumerate(self.get_realization_mask_with_responses()) if b
+            idx for idx, b in enumerate(self.get_realization_mask_with_responses(key)) if b
         ]
 
     def set_failure(
@@ -251,23 +255,21 @@ class LocalEnsembleReader:
         assert isinstance(config, GenDataConfig)
         return config
 
-    @deprecated("Check the experiment for registered responses")
+    #@deprecated("Check the experiment for registered responses")
     def get_gen_data_keyset(self) -> List[str]:
-        keylist = [
-            k
-            for k, v in self.experiment.response_info.items()
-            if "_ert_kind" in v and v["_ert_kind"] == "GenDataConfig"
-        ]
-
+        import time
+        t= time.perf_counter()
         gen_data_list = []
-        for key in keylist:
-            gen_data_config = self._get_gen_data_config(key)
-            if gen_data_config.report_steps is None:
-                gen_data_list.append(f"{key}@0")
-            else:
-                for report_step in gen_data_config.report_steps:
-                    gen_data_list.append(f"{key}@{report_step}")
-        return sorted(gen_data_list, key=lambda k: k.lower())
+        for k,v in self.experiment.response_configuration.items():
+            if isinstance(v, GenDataConfig):
+                if v.report_steps is None:
+                    gen_data_list.append(f"{k}@0")
+                else:
+                    for report_step in v.report_steps:
+                        gen_data_list.append(f"{k}@{report_step}")
+        ss=  sorted(gen_data_list, key=lambda k: k.lower())
+        print(f"get_gen_data_keyset  {time.perf_counter()-t}") 
+        return ss
 
     @deprecated("Check the experiment for registered parameters")
     def get_gen_kw_keyset(self) -> List[str]:
@@ -293,7 +295,7 @@ class LocalEnsembleReader:
         report_step: int,
         realization_index: Optional[int] = None,
     ) -> pd.DataFrame:
-        realizations = self.get_realization_list_with_responses()
+        realizations = self.get_realization_list_with_responses(key)
         if realization_index is not None:
             if realization_index not in realizations:
                 raise IndexError(f"No such realization {realization_index}")
@@ -355,6 +357,8 @@ class LocalEnsembleReader:
     def load_responses(
         self, key: str, realizations: npt.NDArray[np.int_]
     ) -> xr.Dataset:
+        import time
+        t= time.perf_counter()
         if key not in self.experiment.response_configuration:
             raise ValueError(f"{key} is not a response")
         loaded = []
@@ -362,10 +366,11 @@ class LocalEnsembleReader:
             input_path = self.mount_point / f"realization-{realization}" / f"{key}.nc"
             if not input_path.exists():
                 raise KeyError(f"No response for key {key}, realization: {realization}")
-            ds = xr.open_dataset(input_path, engine="netcdf4")
+            ds = xr.open_dataset(input_path, engine="scipy")
             loaded.append(ds)
         response = xr.combine_nested(loaded, concat_dim="realization")
         assert isinstance(response, xr.Dataset)
+        print(f"load_response {time.perf_counter() -t}")
         return response
 
 
@@ -375,14 +380,10 @@ class LocalEnsembleReader:
         loaded = []
         for realization in realizations:
             input_path = self.mount_point / f"realization-{realization}" / f"summary.nc"
-            if not input_path.exists():
-                raise KeyError(f"No response for summary, realization: {realization}")
-            
-            ## test using xarray.open_mfdataset()
-            ds = xr.open_dataset(input_path, engine="scipy")
-            ds= ds.query(name=f'name=="{key}"')
-            
-            loaded.append(ds)
+            if input_path.exists():
+                ds = xr.open_dataset(input_path, engine="scipy")
+                ds= ds.query(name=f'name=="{key}"')
+                loaded.append(ds)
         response = xr.combine_nested(loaded, concat_dim="realization")
         assert isinstance(response, xr.Dataset)
         return response
@@ -390,15 +391,19 @@ class LocalEnsembleReader:
 
 
     def load_summary(self, key:str, realization_index: Optional[int] = None,) -> pd.DataFrame:
-        realizations = self.get_realization_list_with_responses()
+        import time 
+        t = time.perf_counter()
+        #realizations = self.get_realization_list_with_responses("summary")
+        #realizations = self.get_realization_list_with_responses()
+        realizations = [i for i in range(self.ensemble_size)]
+
         if realization_index is not None:
             if realization_index not in realizations:
                 raise IndexError(f"No such realization {realization_index}")
             realizations = [realization_index]
 
-        import time 
+        
         try:
-            t = time.perf_counter()
             df = self.load_responses_summary(key, tuple(realizations)).to_dataframe()
             print(f"load_summary - Load time used {time.perf_counter() - t}")
         except (ValueError, KeyError):

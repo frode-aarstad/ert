@@ -175,7 +175,7 @@ async def get_ensemble_record(
     name: str,
     ensemble_id: UUID,
     accept: Annotated[Union[str, None], Header()] = None,
-    realization_index: Optional[int] = None,
+    realization_index: Optional[int] = None, # remove this?? Is it used anywhere?
     label: Optional[str] = None,
 ) -> Any:
     import time
@@ -192,16 +192,16 @@ async def get_ensemble_record(
         dataframe.columns = [str(s) for s in dataframe.columns]
         stream = io.BytesIO()
         dataframe.to_parquet(stream)
-        print(f"rest {time.perf_counter()- t}") 
+        print(f"rest1 {name} {time.perf_counter()- t}") 
         return Response(
             content=stream.getvalue(),
             media_type="application/x-parquet",
         )
     elif media_type == "application/json":
-        print(f"rest {time.perf_counter()- t}") 
+        print(f"rest2 {time.perf_counter()- t}") 
         return Response(dataframe.to_json(), media_type="application/json")
     else:
-        print(f"rest {time.perf_counter()- t}") 
+        print(f"rest3 {time.perf_counter()- t}") 
         return Response(
             content=dataframe.to_csv().encode(),
             media_type="text/csv",
@@ -262,6 +262,8 @@ def get_ensemble_responses(
     for obs in res.get_observations():
         name_dict[obs.observation_key] = obs.observation_type
 
+    import time
+    t= time.perf_counter()
     for name in ens.get_summary_keyset():
         response_map[str(name)] = js.RecordOut(
             id=UUID(int=0),
@@ -269,7 +271,9 @@ def get_ensemble_responses(
             userdata={"data_origin": "Summary"},
             has_observations=name in name_dict,
         )
+    print(f"get_ensemble_responses 1 {time.perf_counter() - t}")
 
+    t= time.perf_counter()
     for name in res.get_gen_data_keys():
         obs_keys = res.observation_keys(name)
         response_map[str(name)] = js.RecordOut(
@@ -278,5 +282,6 @@ def get_ensemble_responses(
             userdata={"data_origin": "GEN_DATA"},
             has_observations=len(obs_keys) != 0,
         )
+    print(f"get_ensemble_responses 2 {time.perf_counter() - t}")
 
     return response_map
