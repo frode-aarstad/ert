@@ -248,7 +248,7 @@ def server_is_running(url: str, cert: str, auth: tuple[str, str]) -> bool:
 
 def start_monitor(
     server_context: tuple[str, str, tuple[str, str]],
-    callback: Callable[..., dict[str, Any]],
+    callback: Callable[..., None],
     polling_interval: float = 0.1,
 ) -> None:
     """
@@ -291,8 +291,8 @@ def start_monitor(
                 new_opt_status = _query_server(cert, auth, opt_endpoint)
                 if new_opt_status != opt_status:
                     opt_status = new_opt_status
-                    ret = bool(callback({OPT_PROGRESS_ID: opt_status}))
-                    stop |= ret
+                    callback({OPT_PROGRESS_ID: opt_status})
+                    stop = True
                 time.sleep(polling_interval)
     except:
         logging.debug(traceback.format_exc())
