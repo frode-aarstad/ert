@@ -43,7 +43,7 @@ def everest_entry(args=None):
     options = parser.parse_args(args)
 
     if options.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger(EVEREST).setLevel(logging.DEBUG)
         # Remove the null handler if set:
         logging.getLogger().removeHandler(logging.NullHandler())
 
@@ -89,7 +89,7 @@ def _build_args_parser():
 
 
 async def run_everest(options):
-    logger = logging.getLogger("everest_main")
+    logger = logging.getLogger(EVEREST)
     everserver_status_path = ServerConfig.get_everserver_status_path(
         options.config.output_dir
     )
@@ -136,7 +136,7 @@ async def run_everest(options):
             save_config_path = os.path.join(output_dir, config_file)
             options.config.dump(save_config_path)
         except (OSError, LookupError) as e:
-            logging.getLogger(EVEREST).error(f"Failed to save optimization config: {e}")
+            logger.error(f"Failed to save optimization config: {e}")
 
         logging_level = logging.DEBUG if options.debug else options.config.logging_level
         await start_server(options.config, logging_level)

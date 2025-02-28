@@ -9,6 +9,7 @@ from functools import partial
 from everest.config import EverestConfig, ServerConfig
 from everest.detached import ServerStatus, everserver_status, server_is_running
 from everest.everest_storage import EverestStorage
+from everest.strings import EVEREST
 
 from .utils import (
     handle_keyboard_interrupt,
@@ -23,7 +24,7 @@ def monitor_entry(args=None):
     options = parser.parse_args(args)
 
     if options.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger(EVEREST).setLevel(logging.DEBUG)
         # Remove the null handler if set:
         logging.getLogger().removeHandler(logging.NullHandler())
 

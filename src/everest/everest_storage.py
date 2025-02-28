@@ -19,7 +19,7 @@ from ropt.results import FunctionResults, GradientResults
 from everest.config import EverestConfig
 from everest.strings import EVEREST
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(EVEREST)
 
 
 @dataclass
@@ -381,9 +381,7 @@ class EverestStorage:
             output_dir / "seba.db.backup"
         ):
             trace = "\n".join(traceback.format_stack())
-            logging.getLogger(EVEREST).error(
-                f"Tried opening old seba storage.Traceback: {trace}"
-            )
+            logger.error(f"Tried opening old seba storage.Traceback: {trace}")
             raise SystemExit(
                 f"Trying to open old storage @ {output_dir}/seba.db."
                 f"This storage can only be opened with an ert[everest] version <= 12.1.2"

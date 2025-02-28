@@ -10,34 +10,49 @@ from typing import ClassVar
 import colorama
 from colorama import Fore
 
+from ert.config.parsing.queue_system import QueueSystem
 from ert.ensemble_evaluator import (
     EnsembleSnapshot,
     FullSnapshotEvent,
     SnapshotUpdateEvent,
 )
 from ert.resources import all_shell_script_fm_steps
+from everest.config.server_config import ServerConfig
 from everest.detached import (
     OPT_PROGRESS_ID,
     ServerStatus,
     everserver_status,
     get_opt_status,
+    server_is_running,
     start_monitor,
+    stop_server,
 )
 from everest.simulator import JOB_FAILURE, JOB_RUNNING, JOB_SUCCESS
 from everest.strings import EVEREST, SIM_PROGRESS_ID
 
 
-def handle_keyboard_interrupt(signal, frame, options):
+def handle_keyboard_interrupt(signum, frame, options):
     print("\n" + "=" * 80)
-    print(f"KeyboardInterrupt (ID: {signal}) has been caught. Program will exit...")
-    config_file = options.config.config_file
-    print(
-        "You are running in detached mode.\n"
-        "To monitor the running optimization use command:\n"
-        f"  `everest monitor {config_file}`\n"
-        "To kill the running optimization use command:\n"
-        f"  `everest kill {config_file}`"
-    )
+    if options.config.server_queue_system == QueueSystem.LOCAL:
+        server_context = ServerConfig.get_server_context(options.config.output_dir)
+        if server_is_running(*server_context):
+            stop_server(server_context)
+
+        print(
+            f"KeyboardInterrupt (ID: {signum}) has been caught. \n"
+            "You are running locally. \n"
+            "The optimization will be stopped and the program will exit..."
+        )
+    else:
+        print(f"KeyboardInterrupt (ID: {signum}) has been caught. Program will exit...")
+        config_file = options.config.config_file
+        print(
+            "You are running in detached mode.\n"
+            "To monitor the running optimization use command:\n"
+            f"  `everest monitor {config_file}`\n"
+            "To kill the running optimization use command:\n"
+            f"  `everest kill {config_file}`"
+        )
     print("=" * 80)
     sys.tracebacklimit = 0
     sys.stdout = open(os.devnull, "w", encoding="utf-8")  # noqa SIM115

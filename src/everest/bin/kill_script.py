@@ -12,6 +12,7 @@ from functools import partial
 
 from everest.config import EverestConfig, ServerConfig
 from everest.detached import server_is_running, stop_server, wait_for_server_to_stop
+from everest.strings import EVEREST
 from everest.util import version_info
 
 
@@ -21,7 +22,7 @@ def kill_entry(args=None):
     options = parser.parse_args(args)
 
     if options.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger(EVEREST).setLevel(logging.DEBUG)
         # Remove the null handler if set:
         logging.getLogger().removeHandler(logging.NullHandler())
 

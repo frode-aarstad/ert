@@ -377,3 +377,7 @@ def test_validate_ert_config_before_starting_everest_server(
 
     with pytest.raises(SystemExit, match="Config validation error:"):
         everest_entry([config_file])
+
+
+def test_stopping_local_queue_with_ctrl_c(copy_math_func_test_data_to_tmp):
+    pass
