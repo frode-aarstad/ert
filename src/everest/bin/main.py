@@ -3,6 +3,8 @@ import argparse
 import logging
 import sys
 
+from everest.strings import EVEREST
+
 try:
     from ert.shared.version import __version__ as everest_version
 except ImportError:
@@ -80,8 +82,7 @@ class EverestMain:
 
         # Setup logging from plugins:
         EverestPluginManager().add_log_handle_to_root()
-        logger = logging.getLogger(__name__)
-        logger.info(f"Started everest with {parsed_args}")
+        logging.getLogger(EVEREST).info(f"Started everest with {parsed_args}")
         # Use dispatch pattern to invoke method with same name
         getattr(self, parsed_args.command)(args[2:])
 

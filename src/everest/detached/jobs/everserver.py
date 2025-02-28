@@ -70,6 +70,7 @@ from everest.plugins.everest_plugin_manager import EverestPluginManager
 from everest.strings import (
     DEFAULT_LOGGING_FORMAT,
     EVEREST,
+    EVERSERVER,
     OPT_FAILURE_REALIZATIONS,
     OPT_PROGRESS_ENDPOINT,
     OPTIMIZATION_LOG_DIR,
@@ -253,7 +254,7 @@ def _everserver_thread(
             )
 
     def _log(request: Request) -> None:
-        logging.getLogger("everserver").info(
+        logging.getLogger(EVERSERVER).info(
             f"{request.scope['path']} entered from {request.client.host if request.client else 'unknown host'} with HTTP {request.method}"
         )
 
@@ -363,11 +364,9 @@ def _find_open_port(host: str, lower: int, upper: int) -> int:
             sock.close()
             return port
         except OSError:
-            logging.getLogger("everserver").info(
-                f"Port {port} for host {host} is taken"
-            )
+            logging.getLogger(EVERSERVER).info(f"Port {port} for host {host} is taken")
     msg = f"Failed 10 times to get a random port in the range {lower}-{upper} on {host}. Giving up."
-    logging.getLogger("everserver").exception(msg)
+    logging.getLogger(EVERSERVER).exception(msg)
     raise Exception(msg)
 
 
