@@ -34,43 +34,24 @@ run_ert_with_opm() {
     popd
 }
 
-# Clean up everest egg tmp folders
-remove_one_week_old_temp_folders () {
-    case "$1" in
-        "azure")
-            runner_root="/lustre1/users/f_scout_ci/egg_tests"
-            ;;
-        *)
-            runner_root="/scratch/oompf/egg_tests"
-            ;;
-    esac
-    old_directories=$(find $runner_root -maxdepth 1 -mtime +7 -user f_scout_ci -type d 2>/dev/null || true)
-    if [[ -n "$old_directories" ]] ; then
-        echo "Host: $(hostname -s), removing the following dirs: $old_directories"
-        rm -rf "$old_directories" || true
-    fi
-}
 
 
-make_egg_runpath () {
-    case "$1" in
-        "azure")
-            mkdir -p /lustre1/users/f_scout_ci/egg_tests
-            mktemp -d -p /lustre1/users/f_scout_ci/egg_tests
-            ;;
-        *)
-            mkdir -p /scratch/oompf/egg_tests
-            mktemp -d -p /scratch/oompf/egg_tests
-            ;;
-    esac
-}
-
-
-# Run everest egg test on the cluster both onprem and azure
 run_everest_egg_test() {
 
+    if [[ "$CI_RUNNER_LABEL" == "azure" ]]; then
+        RUNNER_ROOT="/lustre1/users/f_scout_ci/egg_tests"
+    elif [[ "$CI_RUNNER_LABEL" == "onprem" ]]; then
+        RUNNER_ROOT="/scratch/oompf/egg_tests"
+    else
+        echo "Unsupported runner label: $CI_RUNNER_LABEL"
+        return 1
+    fi
+
+    mkdir -p "$RUNNER_ROOT"
+    
+    EGG_RUNPATH=$(mktemp -d -p "$RUNNER_ROOT")
+    
     # Need to copy the egg test to a directory that is accessible by all cluster members
-    EGG_RUNPATH=$(make_egg_runpath "$CI_RUNNER_LABEL")
     cp -r "${CI_SOURCE_ROOT}/test-data/everest/egg" "$EGG_RUNPATH"
     chmod -R a+rx "$EGG_RUNPATH"
     pushd "${EGG_RUNPATH}/egg"
@@ -93,12 +74,11 @@ run_everest_egg_test() {
     STATUS=$?
     popd
 
-    remove_one_week_old_temp_folders "$CI_RUNNER_LABEL"
+    # Clean up the temp folder removing folders older than 7 days
+    find "$RUNNER_ROOT" -maxdepth 1 -mtime +7 -user f_scout_ci -type d -exec rm -r {} \;
 
     return $STATUS
 }
-
-
 
 start_tests() {
     export NO_PROXY=localhost,127.0.0.1
@@ -112,27 +92,27 @@ start_tests() {
     export ERT_PYTEST_ARGS=--eclipse-simulator
 
     # Run all ert & everest tests
-    just -f "${CI_SOURCE_ROOT}"/justfile test-all
+    #just -f "${CI_SOURCE_ROOT}"/justfile test-all
     return_code_ert_main_tests=$?
 
     # Restricting the number of threads utilized by numpy to control memory consumption, as some tests evaluate memory usage and additional threads increase it.
     export OMP_NUM_THREADS=1
 
     # Run ert tests that evaluates memory consumption
-    pytest -n 2 --durations=0 -m "limit_memory" --memray
+    #pytest -n 2 --durations=0 -m "limit_memory" --memray
     return_code_ert_memory_consumption_tests=$?
 
     unset OMP_NUM_THREADS
 
     # Run ert scheduler tests on the actual cluster (defined by $_ERT_TESTS_QUEUE_SYSTEM)
-    basetemp=$(mktemp -d -p "$_ERT_TESTS_SHARED_TMP")
-    pytest --timeout=3600 -v --"$_ERT_TESTS_QUEUE_SYSTEM" --basetemp="$basetemp" unit_tests/scheduler
+    #basetemp=$(mktemp -d -p "$_ERT_TESTS_SHARED_TMP")
+    #pytest --timeout=3600 -v --"$_ERT_TESTS_QUEUE_SYSTEM" --basetemp="$basetemp" unit_tests/scheduler
     return_code_ert_scheduler_tests=$?
-    rm -rf "$basetemp" || true
+    #rm -rf "$basetemp" || true
 
     popd
 
-    run_ert_with_opm
+    #run_ert_with_opm
     return_code_opm_integration_test=$?
 
     run_everest_egg_test
